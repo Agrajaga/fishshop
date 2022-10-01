@@ -4,6 +4,7 @@ import requests
 from dotenv import load_dotenv
 from urllib.parse import urljoin
 
+
 def authenticate(host: str, client_id: str) -> str:
     token_url = urljoin(host, "/oauth/access_token")
     data = {
@@ -35,6 +36,12 @@ def get_product(host: str, token: str, product_id: str) -> dict:
     return response.json()["data"]
 
 
+def get_product_image_url(host: str, token: str, product_id: str) -> str:
+    product = get_product(host, token, product_id)
+    image_id = product["relationships"]["main_image"]["data"]["id"]
+    return get_file_url(host, token, image_id)
+
+
 def get_cart(host: str, token: str, cart_reference: str) -> dict:
     cart_url = urljoin(host, f"/v2/carts/{cart_reference}")
     header = {
@@ -55,7 +62,18 @@ def get_cart_items(host: str, token: str, cart_reference: str) -> dict:
     return response.json()
 
 
-def add_product(
+def get_file_url(host: str, token: str, file_id: str) -> str:
+    header = {
+        "Authorization": f"Bearer {token}",
+    }
+    url = urljoin(host, f"/v2/files/{file_id}")
+    response = requests.get(url, headers=header)
+    response.raise_for_status()
+    link = response.json()["data"]["link"]["href"]
+    return link
+
+
+def add_product_to_cart(
     host: str,
     token: str,
     cart_reference: str,

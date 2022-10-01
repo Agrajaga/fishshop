@@ -3,7 +3,7 @@ import os
 
 import redis
 from dotenv import load_dotenv
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto, Update
 from telegram.ext import (CallbackQueryHandler, CommandHandler, Filters,
                           MessageHandler, Updater)
 
@@ -37,6 +37,8 @@ def handle_menu(update: Update, _) -> State:
     query.answer()
     product_id = query.data
     product = shop_api.get_product(_shop_host, _shop_token, product_id)
+    product_photo_url = shop_api.get_product_image_url(
+        _shop_host, _shop_token, product_id)
     description = "\n".join(
         [
             product["name"],
@@ -44,7 +46,8 @@ def handle_menu(update: Update, _) -> State:
             product["description"],
         ]
     )
-    query.edit_message_text(text=description)
+    query.message.reply_photo(product_photo_url, caption=description)
+    query.delete_message()
     return State.START
 
 
