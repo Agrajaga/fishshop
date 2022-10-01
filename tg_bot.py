@@ -27,10 +27,13 @@ def make_menu_keyboard() -> InlineKeyboardMarkup:
             InlineKeyboardButton(product["name"], callback_data=product["id"]),
         ] for product in products
     ]
+    keyboard.append([InlineKeyboardButton("Корзина", callback_data="cart")])
     return InlineKeyboardMarkup(keyboard)
 
 
 def start(update: Update, _) -> State:
+    shop_api.get_cart(_shop_host, _shop_token,
+                      cart_reference=update.effective_user.id)
     markup = make_menu_keyboard()
     update.message.reply_text(text='Выберите товар:', reply_markup=markup)
     return State.HANDLE_MENU
@@ -39,10 +42,22 @@ def start(update: Update, _) -> State:
 def handle_description(update: Update, _) -> State:
     query = update.callback_query
     query.answer()
-    markup = make_menu_keyboard()
-    query.delete_message()
-    query.message.reply_text(text="Выберите товар:", reply_markup=markup)
-    return State.HANDLE_MENU
+    if query.data == "back":
+        markup = make_menu_keyboard()
+        query.delete_message()
+        query.message.reply_text(text="Выберите товар:", reply_markup=markup)
+        return State.HANDLE_MENU
+    product_id, quantity = query.data.split(",")
+    shop_api.add_product_to_cart(
+        host=_shop_host,
+        token=_shop_token,
+        cart_reference=update.effective_user.id,
+        product_id=product_id,
+        quantity=int(quantity)
+    )
+    print(shop_api.get_cart_items(_shop_host,
+          _shop_token, update.effective_user.id))
+    return State.HANDLE_DESCRIPTION
 
 
 def handle_menu(update: Update, _) -> State:
@@ -54,9 +69,9 @@ def handle_menu(update: Update, _) -> State:
         _shop_host, _shop_token, product_id)
     keyboard = [
         [
-            InlineKeyboardButton("1 кг", callback_data=1),
-            InlineKeyboardButton("5 кг", callback_data=5),
-            InlineKeyboardButton("10 кг", callback_data=10),
+            InlineKeyboardButton("1 кг", callback_data=f"{product_id},1"),
+            InlineKeyboardButton("5 кг", callback_data=f"{product_id},5"),
+            InlineKeyboardButton("10 кг", callback_data=f"{product_id},10"),
         ],
         [
             InlineKeyboardButton("Назад", callback_data="back"),
