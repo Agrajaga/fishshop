@@ -17,18 +17,31 @@ _shop_token = ""
 class State(IntEnum):
     START = auto()
     HANDLE_MENU = auto()
+    HANDLE_DESCRIPTION = auto()
 
 
-def start(update: Update, _) -> State:
+def make_menu_keyboard() -> InlineKeyboardMarkup:
     products = shop_api.get_products(_shop_host, _shop_token)
     keyboard = [
         [
             InlineKeyboardButton(product["name"], callback_data=product["id"]),
         ] for product in products
     ]
-    markup = InlineKeyboardMarkup(keyboard)
+    return InlineKeyboardMarkup(keyboard)
 
-    update.message.reply_text(text='Привет!', reply_markup=markup)
+
+def start(update: Update, _) -> State:
+    markup = make_menu_keyboard()
+    update.message.reply_text(text='Выберите товар:', reply_markup=markup)
+    return State.HANDLE_MENU
+
+
+def handle_description(update: Update, _) -> State:
+    query = update.callback_query
+    query.answer()
+    markup = make_menu_keyboard()
+    query.delete_message()
+    query.message.reply_text(text="Выберите товар:", reply_markup=markup)
     return State.HANDLE_MENU
 
 
@@ -39,16 +52,31 @@ def handle_menu(update: Update, _) -> State:
     product = shop_api.get_product(_shop_host, _shop_token, product_id)
     product_photo_url = shop_api.get_product_image_url(
         _shop_host, _shop_token, product_id)
+    keyboard = [
+        [
+            InlineKeyboardButton("1 кг", callback_data=1),
+            InlineKeyboardButton("5 кг", callback_data=5),
+            InlineKeyboardButton("10 кг", callback_data=10),
+        ],
+        [
+            InlineKeyboardButton("Назад", callback_data="back"),
+        ]
+    ]
+    markup = InlineKeyboardMarkup(keyboard)
+
     description = "\n".join(
         [
             product["name"],
             "\n",
+            product["meta"]["display_price"]["with_tax"]["formatted"],
+            "\n",
             product["description"],
         ]
     )
-    query.message.reply_photo(product_photo_url, caption=description)
     query.delete_message()
-    return State.START
+    query.message.reply_photo(
+        product_photo_url, caption=description, reply_markup=markup)
+    return State.HANDLE_DESCRIPTION
 
 
 def handle_users_reply(update, context):
@@ -82,16 +110,11 @@ def handle_users_reply(update, context):
     states_functions = {
         State.START: start,
         State.HANDLE_MENU: handle_menu,
+        State.HANDLE_DESCRIPTION: handle_description,
     }
     state_handler = states_functions[user_state]
-    # Если вы вдруг не заметите, что python-telegram-bot перехватывает ошибки.
-    # Оставляю этот try...except, чтобы код не падал молча.
-    # Этот фрагмент можно переписать.
-    try:
-        next_state = state_handler(update, context)
-        db.set(chat_id, int(next_state))
-    except Exception as err:
-        print(err)
+    next_state = state_handler(update, context)
+    db.set(chat_id, int(next_state))
 
 
 def get_database_connection():
