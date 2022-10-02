@@ -96,10 +96,27 @@ def add_product_to_cart(
     return response.json()
 
 
+def remove_cart_item(
+    host: str,
+    token: str,
+    cart_reference: str,
+    item_id: str,
+) -> None:
+    header = {
+        "Authorization": f"Bearer {token}",
+    }
+    url = urljoin(host, f"/v2/carts/{cart_reference}/items/{item_id}")
+    response = requests.delete(url, headers=header)
+    response.raise_for_status()
+
+
 if __name__ == "__main__":
+    from pprint import pprint
     load_dotenv()
     host = os.getenv("SHOP_HOST")
     client_id = os.getenv("SHOP_CLIENT_ID")
     implicit_token = authenticate(host, client_id)
-    print(get_products(host, implicit_token))
+    #pprint(get_products(host, implicit_token))
     #print(get_cart_items(host, implicit_token, "my_cart"))
+    pprint(get_product(host, implicit_token,
+           "dda5bd6a-7216-457c-8a5f-da03b09421ab"))

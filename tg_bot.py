@@ -31,7 +31,7 @@ def show_menu(message: Message) -> None:
     ]
     keyboard.append([InlineKeyboardButton("Корзина", callback_data="cart")])
     markup = InlineKeyboardMarkup(keyboard)
-    message.reply_text(text='Выберите товар:', reply_markup=markup)
+    message.reply_text(text="Выберите товар:", reply_markup=markup)
 
 
 def show_product(message: Message, product_id: str) -> None:
@@ -70,18 +70,21 @@ def show_cart(message: Message, cart_reference: str) -> None:
         _shop_host, _shop_token, cart_reference)
     total = cart_description["meta"]["display_price"]["with_tax"]["formatted"]
     cart_items = []
+    keyboard = []
     for item in cart_description["data"]:
-        cost = item['meta']['display_price']['with_tax']
+        cost = item["meta"]["display_price"]["with_tax"]
         item_description = [
-            item['name'],
+            item["name"],
             f"{cost['unit']['formatted']} за кг",
             f"{item['quantity']} кг на сумму {cost['value']['formatted']}",
             "\n",
         ]
         cart_items.extend(item_description)
+        keyboard.append([InlineKeyboardButton(
+            f"Убрать {item['name']}", callback_data=item["id"])])
     cart_items.append(f"Итого: {total}")
     cart_text = "\n".join(cart_items)
-    keyboard = [[InlineKeyboardButton("Назад", callback_data="back")]]
+    keyboard.append([InlineKeyboardButton("В меню", callback_data="back")])
     markup = InlineKeyboardMarkup(keyboard)
     message.reply_text(cart_text, reply_markup=markup)
 
@@ -133,6 +136,14 @@ def handle_cart(update: Update, _) -> State:
         query.delete_message()
         show_menu(query.message)
         return State.MENU
+    shop_api.remove_cart_item(
+        host=_shop_host,
+        token=_shop_token,
+        cart_reference=update.effective_user.id,
+        item_id=query.data,
+    )
+    query.delete_message()
+    show_cart(query.message, cart_reference=update.effective_user.id)
     return State.CART
 
 
@@ -159,7 +170,7 @@ def handle_users_reply(update, context):
         chat_id = update.callback_query.message.chat_id
     else:
         return
-    if user_reply == '/start':
+    if user_reply == "/start":
         user_state = State.START
     else:
         user_state = State(int(db.get(chat_id)))
@@ -189,7 +200,7 @@ def get_database_connection():
     return _database
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     load_dotenv()
     token = os.getenv("TELEGRAM_TOKEN")
     _shop_host = os.getenv("SHOP_HOST")
@@ -200,5 +211,5 @@ if __name__ == '__main__':
     dispatcher = updater.dispatcher
     dispatcher.add_handler(CallbackQueryHandler(handle_users_reply))
     dispatcher.add_handler(MessageHandler(Filters.text, handle_users_reply))
-    dispatcher.add_handler(CommandHandler('start', handle_users_reply))
+    dispatcher.add_handler(CommandHandler("start", handle_users_reply))
     updater.start_polling()
