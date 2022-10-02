@@ -1,9 +1,10 @@
-from enum import IntEnum, auto
 import os
+from enum import IntEnum, auto
 
 import redis
 from dotenv import load_dotenv
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto, Update
+from telegram import (InlineKeyboardButton, InlineKeyboardMarkup,
+                      InputMediaPhoto, Message, Update)
 from telegram.ext import (CallbackQueryHandler, CommandHandler, Filters,
                           MessageHandler, Updater)
 
@@ -16,11 +17,12 @@ _shop_token = ""
 
 class State(IntEnum):
     START = auto()
-    HANDLE_MENU = auto()
-    HANDLE_DESCRIPTION = auto()
+    MENU = auto()
+    DESCRIPTION = auto()
+    CART = auto()
 
 
-def make_menu_keyboard() -> InlineKeyboardMarkup:
+def show_menu(message: Message) -> None:
     products = shop_api.get_products(_shop_host, _shop_token)
     keyboard = [
         [
@@ -28,42 +30,11 @@ def make_menu_keyboard() -> InlineKeyboardMarkup:
         ] for product in products
     ]
     keyboard.append([InlineKeyboardButton("Корзина", callback_data="cart")])
-    return InlineKeyboardMarkup(keyboard)
+    markup = InlineKeyboardMarkup(keyboard)
+    message.reply_text(text='Выберите товар:', reply_markup=markup)
 
 
-def start(update: Update, _) -> State:
-    shop_api.get_cart(_shop_host, _shop_token,
-                      cart_reference=update.effective_user.id)
-    markup = make_menu_keyboard()
-    update.message.reply_text(text='Выберите товар:', reply_markup=markup)
-    return State.HANDLE_MENU
-
-
-def handle_description(update: Update, _) -> State:
-    query = update.callback_query
-    query.answer()
-    if query.data == "back":
-        markup = make_menu_keyboard()
-        query.delete_message()
-        query.message.reply_text(text="Выберите товар:", reply_markup=markup)
-        return State.HANDLE_MENU
-    product_id, quantity = query.data.split(",")
-    shop_api.add_product_to_cart(
-        host=_shop_host,
-        token=_shop_token,
-        cart_reference=update.effective_user.id,
-        product_id=product_id,
-        quantity=int(quantity)
-    )
-    print(shop_api.get_cart_items(_shop_host,
-          _shop_token, update.effective_user.id))
-    return State.HANDLE_DESCRIPTION
-
-
-def handle_menu(update: Update, _) -> State:
-    query = update.callback_query
-    query.answer()
-    product_id = query.data
+def show_product(message: Message, product_id: str) -> None:
     product = shop_api.get_product(_shop_host, _shop_token, product_id)
     product_photo_url = shop_api.get_product_image_url(
         _shop_host, _shop_token, product_id)
@@ -74,11 +45,13 @@ def handle_menu(update: Update, _) -> State:
             InlineKeyboardButton("10 кг", callback_data=f"{product_id},10"),
         ],
         [
+            InlineKeyboardButton("Корзина", callback_data="cart")
+        ],
+        [
             InlineKeyboardButton("Назад", callback_data="back"),
-        ]
+        ],
     ]
     markup = InlineKeyboardMarkup(keyboard)
-
     description = "\n".join(
         [
             product["name"],
@@ -88,10 +61,79 @@ def handle_menu(update: Update, _) -> State:
             product["description"],
         ]
     )
-    query.delete_message()
-    query.message.reply_photo(
+    message.reply_photo(
         product_photo_url, caption=description, reply_markup=markup)
-    return State.HANDLE_DESCRIPTION
+
+
+def show_cart(message: Message, cart_reference: str) -> None:
+    cart_description = shop_api.get_cart_items(
+        _shop_host, _shop_token, cart_reference)
+    total = cart_description["meta"]["display_price"]["with_tax"]["formatted"]
+    cart_items = []
+    for item in cart_description["data"]:
+        cost = item['meta']['display_price']['with_tax']
+        item_description = [
+            item['name'],
+            f"{cost['unit']['formatted']} за кг",
+            f"{item['quantity']} кг на сумму {cost['value']['formatted']}",
+            "\n",
+        ]
+        cart_items.extend(item_description)
+    cart_items.append(f"Итого: {total}")
+    cart_text = "\n".join(cart_items)
+    keyboard = [[InlineKeyboardButton("Назад", callback_data="back")]]
+    markup = InlineKeyboardMarkup(keyboard)
+    message.reply_text(cart_text, reply_markup=markup)
+
+
+def start(update: Update, _) -> State:
+    shop_api.get_cart(_shop_host, _shop_token,
+                      cart_reference=update.effective_user.id)
+    show_menu(update.message)
+    return State.MENU
+
+
+def handle_menu(update: Update, _) -> State:
+    query = update.callback_query
+    query.answer()
+    query.delete_message()
+    if query.data == "cart":
+        show_cart(query.message, update.effective_user.id)
+        return State.CART
+    show_product(query.message, product_id=query.data)
+    return State.DESCRIPTION
+
+
+def handle_description(update: Update, _) -> State:
+    query = update.callback_query
+    query.answer()
+    if query.data == "back":
+        query.delete_message()
+        show_menu(query.message)
+        return State.MENU
+    if query.data == "cart":
+        query.delete_message()
+        show_cart(query.message, update.effective_user.id)
+        return State.CART
+    product_id, quantity = query.data.split(",")
+    shop_api.add_product_to_cart(
+        host=_shop_host,
+        token=_shop_token,
+        cart_reference=update.effective_user.id,
+        product_id=product_id,
+        quantity=int(quantity)
+    )
+    return State.DESCRIPTION
+
+
+def handle_cart(update: Update, _) -> State:
+    query = update.callback_query
+    query.answer()
+    if query.data == "back":
+        query.delete_message()
+        show_menu(query.message)
+        return State.MENU
+    return State.CART
 
 
 def handle_users_reply(update, context):
@@ -124,8 +166,9 @@ def handle_users_reply(update, context):
 
     states_functions = {
         State.START: start,
-        State.HANDLE_MENU: handle_menu,
-        State.HANDLE_DESCRIPTION: handle_description,
+        State.MENU: handle_menu,
+        State.DESCRIPTION: handle_description,
+        State.CART: handle_cart,
     }
     state_handler = states_functions[user_state]
     next_state = state_handler(update, context)
