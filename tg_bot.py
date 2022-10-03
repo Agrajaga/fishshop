@@ -1,10 +1,10 @@
 import os
 from enum import IntEnum, auto
-
+from email_validate import validate
 import redis
 from dotenv import load_dotenv
-from telegram import (InlineKeyboardButton, InlineKeyboardMarkup,
-                      InputMediaPhoto, Message, Update)
+from telegram import (InlineKeyboardButton, InlineKeyboardMarkup, Message,
+                      Update)
 from telegram.ext import (CallbackQueryHandler, CommandHandler, Filters,
                           MessageHandler, Updater)
 
@@ -20,6 +20,7 @@ class State(IntEnum):
     MENU = auto()
     DESCRIPTION = auto()
     CART = auto()
+    WAITING_EMAIL = auto()
 
 
 def show_menu(message: Message) -> None:
@@ -85,6 +86,8 @@ def show_cart(message: Message, cart_reference: str) -> None:
     cart_items.append(f"Итого: {total}")
     cart_text = "\n".join(cart_items)
     keyboard.append([InlineKeyboardButton("В меню", callback_data="back")])
+    keyboard.append([InlineKeyboardButton(
+        "Оплатить", callback_data="checkout")])
     markup = InlineKeyboardMarkup(keyboard)
     message.reply_text(cart_text, reply_markup=markup)
 
@@ -136,6 +139,9 @@ def handle_cart(update: Update, _) -> State:
         query.delete_message()
         show_menu(query.message)
         return State.MENU
+    if query.data == "checkout":
+        query.message.reply_text("Пожалуйста, укажите Ваш Email")
+        return State.WAITING_EMAIL
     shop_api.remove_cart_item(
         host=_shop_host,
         token=_shop_token,
@@ -145,6 +151,13 @@ def handle_cart(update: Update, _) -> State:
     query.delete_message()
     show_cart(query.message, cart_reference=update.effective_user.id)
     return State.CART
+
+
+def input_email(update: Update, _) -> State:
+    user_email = update.message.text
+    if not validate(user_email, check_blacklist=False, check_dns=False):
+        update.message.reply_text("Ошибка, пожалуйста, укажите корректный Email")
+        return State.WAITING_EMAIL
 
 
 def handle_users_reply(update, context):
@@ -180,6 +193,7 @@ def handle_users_reply(update, context):
         State.MENU: handle_menu,
         State.DESCRIPTION: handle_description,
         State.CART: handle_cart,
+        State.WAITING_EMAIL: input_email,
     }
     state_handler = states_functions[user_state]
     next_state = state_handler(update, context)
