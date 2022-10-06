@@ -110,6 +110,42 @@ def remove_cart_item(
     response.raise_for_status()
 
 
+def create_customer(
+    host: str,
+    token: str,
+    name: str,
+    email: str,
+) -> str:
+    header = {
+        "Authorization": f"Bearer {token}",
+    }
+    url = urljoin(host, "/v2/customers")
+    data = {
+        "data": {
+            "type": "customer",
+            "name": name,
+            "email": email,
+        },
+    }
+    response = requests.post(url, headers=header, json=data)
+    response.raise_for_status()
+    return response.json()
+
+
+def get_customer(
+    host: str,
+    token: str,
+    id: str,
+) -> str:
+    header = {
+        "Authorization": f"Bearer {token}",
+    }
+    url = urljoin(host, f"/v2/customers/{id}")
+    response = requests.get(url, headers=header)
+    response.raise_for_status()
+    return response.json()
+
+
 if __name__ == "__main__":
     from pprint import pprint
     load_dotenv()

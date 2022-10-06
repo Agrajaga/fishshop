@@ -1,6 +1,6 @@
 import os
 from enum import IntEnum, auto
-from email_validate import validate
+
 import redis
 from dotenv import load_dotenv
 from telegram import (InlineKeyboardButton, InlineKeyboardMarkup, Message,
@@ -155,9 +155,17 @@ def handle_cart(update: Update, _) -> State:
 
 def input_email(update: Update, _) -> State:
     user_email = update.message.text
-    if not validate(user_email, check_blacklist=False, check_dns=False):
-        update.message.reply_text("Ошибка, пожалуйста, укажите корректный Email")
-        return State.WAITING_EMAIL
+    user_name = update.effective_user.full_name
+    response = shop_api.create_customer(
+        host=_shop_host,
+        token=_shop_token,
+        name=user_name,
+        email=user_email,
+    )
+    customer_id = response['data']['id']
+    print(customer_id)
+    show_menu(update.message)
+    return State.MENU
 
 
 def handle_users_reply(update, context):
