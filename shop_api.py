@@ -144,15 +144,3 @@ def get_customer(
     response = requests.get(url, headers=header)
     response.raise_for_status()
     return response.json()
-
-
-if __name__ == "__main__":
-    from pprint import pprint
-    load_dotenv()
-    host = os.getenv("SHOP_HOST")
-    client_id = os.getenv("SHOP_CLIENT_ID")
-    implicit_token = authenticate(host, client_id)
-    #pprint(get_products(host, implicit_token))
-    #print(get_cart_items(host, implicit_token, "my_cart"))
-    pprint(get_product(host, implicit_token,
-           "dda5bd6a-7216-457c-8a5f-da03b09421ab"))
