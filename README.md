@@ -27,13 +27,11 @@ ___
     REDIS_HOST=<адрес служебной базы Redis>
     REDIS_PORT=<порт служебной базы Redis>
     REDIS_PASSWORD=<пароль служебной базы Redis>
-    SHOP_HOST=https://api.moltin.com
     SHOP_CLIENT_ID=<токен для API магазина>
     ```
     _Подробнее:_  
     * `TELEGRAM_TOKEN` - получать у [Отца Ботов](https://t.me/BotFather)
     * `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD` - параметры подключения к базе Redis. Поднять базу можно на https://redislabs.com/.
-    * `SHOP_HOST` - адрес для подключения к API
     * `SHOP_CLIENT_ID` - токен для методов API. Необходима регистрация на https://www.elasticpath.com/
 
 1. Запускайте бота командой

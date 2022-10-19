@@ -1,5 +1,6 @@
 import os
 from enum import IntEnum, auto
+from textwrap import dedent
 
 import redis
 from dotenv import load_dotenv
@@ -11,8 +12,6 @@ from telegram.ext import (CallbackQueryHandler, CommandHandler, Filters,
 import shop_api
 
 _database = None
-_shop_host = ""
-_shop_token = ""
 
 
 class State(IntEnum):
@@ -24,7 +23,7 @@ class State(IntEnum):
 
 
 def show_menu(message: Message) -> None:
-    products = shop_api.get_products(_shop_host, _shop_token)
+    products = shop_api.get_products()
     keyboard = [
         [
             InlineKeyboardButton(product["name"], callback_data=product["id"]),
@@ -36,9 +35,8 @@ def show_menu(message: Message) -> None:
 
 
 def show_product(message: Message, product_id: str) -> None:
-    product = shop_api.get_product(_shop_host, _shop_token, product_id)
-    product_photo_url = shop_api.get_product_image_url(
-        _shop_host, _shop_token, product_id)
+    product = shop_api.get_product(product_id)
+    product_photo_url = shop_api.get_product_image_url(product_id)
     keyboard = [
         [
             InlineKeyboardButton("1 кг", callback_data=f"{product_id},1"),
@@ -53,34 +51,31 @@ def show_product(message: Message, product_id: str) -> None:
         ],
     ]
     markup = InlineKeyboardMarkup(keyboard)
-    description = "\n".join(
-        [
-            product["name"],
-            "\n",
-            product["meta"]["display_price"]["with_tax"]["formatted"],
-            "\n",
-            product["description"],
-        ]
-    )
+    description = f"""\
+        {product["name"]}
+
+        {product["meta"]["display_price"]["with_tax"]["formatted"]}
+
+        {product["description"]}
+    """
+
     message.reply_photo(
-        product_photo_url, caption=description, reply_markup=markup)
+        product_photo_url, caption=dedent(description), reply_markup=markup)
 
 
 def show_cart(message: Message, cart_reference: str) -> None:
-    cart_description = shop_api.get_cart_items(
-        _shop_host, _shop_token, cart_reference)
+    cart_description = shop_api.get_cart_items(cart_reference)
     total = cart_description["meta"]["display_price"]["with_tax"]["formatted"]
     cart_items = []
     keyboard = []
     for item in cart_description["data"]:
         cost = item["meta"]["display_price"]["with_tax"]
-        item_description = [
-            item["name"],
-            f"{cost['unit']['formatted']} за кг",
-            f"{item['quantity']} кг на сумму {cost['value']['formatted']}",
-            "\n",
-        ]
-        cart_items.extend(item_description)
+        item_description = f"""\
+            {item["name"]}
+            {cost['unit']['formatted']} за кг
+            {item['quantity']} кг на сумму {cost['value']['formatted']}
+        """
+        cart_items.append(dedent(item_description))
         keyboard.append([InlineKeyboardButton(
             f"Убрать {item['name']}", callback_data=item["id"])])
     cart_items.append(f"Итого: {total}")
@@ -93,8 +88,7 @@ def show_cart(message: Message, cart_reference: str) -> None:
 
 
 def start(update: Update, _) -> State:
-    shop_api.get_cart(_shop_host, _shop_token,
-                      cart_reference=update.effective_user.id)
+    shop_api.get_cart(cart_reference=update.effective_user.id)
     show_menu(update.message)
     return State.MENU
 
@@ -123,8 +117,6 @@ def handle_description(update: Update, _) -> State:
         return State.CART
     product_id, quantity = query.data.split(",")
     shop_api.add_product_to_cart(
-        host=_shop_host,
-        token=_shop_token,
         cart_reference=update.effective_user.id,
         product_id=product_id,
         quantity=int(quantity)
@@ -143,8 +135,6 @@ def handle_cart(update: Update, _) -> State:
         query.message.reply_text("Пожалуйста, укажите Ваш Email")
         return State.WAITING_EMAIL
     shop_api.remove_cart_item(
-        host=_shop_host,
-        token=_shop_token,
         cart_reference=update.effective_user.id,
         item_id=query.data,
     )
@@ -156,12 +146,7 @@ def handle_cart(update: Update, _) -> State:
 def input_email(update: Update, _) -> State:
     user_email = update.message.text
     user_name = update.effective_user.full_name
-    response = shop_api.create_customer(
-        host=_shop_host,
-        token=_shop_token,
-        name=user_name,
-        email=user_email,
-    )
+    response = shop_api.create_customer(name=user_name, email=user_email)
     customer_id = response['data']['id']
     print(customer_id)
     show_menu(update.message)
@@ -225,9 +210,8 @@ def get_database_connection():
 if __name__ == "__main__":
     load_dotenv()
     token = os.getenv("TELEGRAM_TOKEN")
-    _shop_host = os.getenv("SHOP_HOST")
     client_id = os.getenv("SHOP_CLIENT_ID")
-    _shop_token = shop_api.authenticate(_shop_host, client_id)
+    shop_api.authenticate(client_id)
 
     updater = Updater(token)
     dispatcher = updater.dispatcher
