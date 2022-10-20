@@ -146,9 +146,7 @@ def handle_cart(update: Update, _) -> State:
 def input_email(update: Update, _) -> State:
     user_email = update.message.text
     user_name = update.effective_user.full_name
-    response = shop_api.create_customer(name=user_name, email=user_email)
-    customer_id = response['data']['id']
-    print(customer_id)
+    shop_api.create_customer(name=user_name, email=user_email)
     show_menu(update.message)
     return State.MENU
 
